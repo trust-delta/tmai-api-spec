@@ -12,6 +12,19 @@
     },
     "version": "1.7.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:{port}",
+      "description": "Local tmai-core server. Each user runs their own instance; there is no hosted deployment.",
+      "variables": {
+        "port": {
+          "default": "8080",
+          "description": "Port the user's tmai-core instance is listening on (configured via tmai-core settings)."
+        }
+      }
+    }
+  ],
+  "security": [],
   "paths": {
     "/api/task-meta": {
       "get": {
@@ -34,6 +47,22 @@
                 }
               }
             }
+          },
+          "4XX": {
+            "description": "Request failed at a tmai contract boundary. The body is a structured `TmaiError` — callers switch on `code` rather than parsing `message`.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Unexpected internal failure. Body is a `TmaiError` with `code: \"Internal\"` unless a more specific downstream code applies.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
           }
         }
       }
@@ -41,6 +70,103 @@
   },
   "components": {
     "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "description": "Machine-readable, stable error classification.\n\nValues are **stable forever once added** — deprecations are handled by aliasing, not removal. Adding a new code is a minor-version bump of the taxonomy. See `docs/errors.md` for each code's meaning and usage.",
+        "enum": [
+          "CapacityExceeded",
+          "VendorUnavailable",
+          "QueueFull",
+          "AgentNotFound",
+          "AgentInTerminalState",
+          "WorktreeConflict",
+          "PermissionDenied",
+          "TokenInvalid",
+          "InvalidArgument",
+          "SchemaMismatch",
+          "VendorError",
+          "TmuxError",
+          "IpcError",
+          "Internal"
+        ],
+        "x-taxonomy-version": "1"
+      },
+      "RetryHint": {
+        "description": "Advisory retry guidance. Informational only — the caller decides whether to act on it.",
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "RetryAfter",
+            "description": "Retry after a specific wall-clock instant (RFC3339).",
+            "required": ["kind", "resume_at"],
+            "properties": {
+              "kind": { "type": "string", "const": "retry_after" },
+              "resume_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO-8601 / RFC3339 timestamp at which the caller may retry."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "BackoffMs",
+            "description": "Retry after a millisecond backoff (caller-driven clock).",
+            "required": ["kind", "ms"],
+            "properties": {
+              "kind": { "type": "string", "const": "backoff_ms" },
+              "ms": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0,
+                "description": "Milliseconds to wait before retrying."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "NotRetryable",
+            "description": "The failure is not retryable; the caller should surface it instead.",
+            "required": ["kind"],
+            "properties": {
+              "kind": { "type": "string", "const": "not_retryable" }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "retry_after": "#/components/schemas/RetryHint",
+            "backoff_ms": "#/components/schemas/RetryHint",
+            "not_retryable": "#/components/schemas/RetryHint"
+          }
+        }
+      },
+      "TmaiError": {
+        "type": "object",
+        "description": "Structured error carried across every tmai contract boundary (MCP, WebUI, CLI, internal facade API). `code` is the primary dispatch key; `message` is human-readable; `retry_hint` is advisory; `context` is per-code structured detail; `trace_id` ties the error to a tracing span for cross-surface correlation.\n\nSee `docs/errors.md` for code-by-code documentation.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "$ref": "#/components/schemas/ErrorCode" },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary. English-only in v1 (shape supports future i18n)."
+          },
+          "retry_hint": {
+            "$ref": "#/components/schemas/RetryHint",
+            "description": "Advisory retry guidance; absent when the caller has no way to retry."
+          },
+          "context": {
+            "description": "Code-specific structured detail. Always an object in practice; the field is omitted from the wire when the emitter attached nothing.",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "trace_id": {
+            "type": "string",
+            "description": "Request/span identifier for correlating this error across MCP, WebUI, and internal tracing spans."
+          }
+        }
+      },
       "Milestone": {
         "type": "object",
         "description": "A single milestone event in the task lifecycle.\n\nPart of the type-sharing PoC (#446): generated TypeScript lives in\n`crates/tmai-app/web/src/types/generated/Milestone.ts`.",
