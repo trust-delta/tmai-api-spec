@@ -27,7 +27,9 @@ jobs:
         run: |
           mkdir -p _site
           cp openapi.json _site/openapi.json
+          cp corevents.schema.json _site/corevents.schema.json
           cp docs/index.html _site/index.html
+          cp docs/errors.md _site/errors.md
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
