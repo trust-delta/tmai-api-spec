@@ -1,17 +1,35 @@
 # tmai-api-spec
 
-Public API contracts for [tmai](https://github.com/trust-delta/tmai) — the UI contract between `tmai-core` and its UI clients (`tmai-ratatui`, `tmai-react`, and any third-party UI).
+Public API contracts for **tmai**, published as the stable interface between its private core and its public UI clients.
+
+```
+                                    (public)
+            ┌──────────────────────── tmai-api-spec ─────────────────────────┐
+            │  openapi.json · corevents.schema.json · docs/errors.md · docs/ │
+            └────▲───────────────────────────────────────────────────▲───────┘
+                 │ publishes the public contract                     │ consumes
+                 │                                                   │
+          ┌──────┴──────┐                              ┌─────────────┴──────────┐
+          │  tmai-core  │                              │       tmai-react       │
+          │  (private)  │ ◀─── HTTP / SSE / MCP ──────▶│ (public WebUI client)  │
+          └─────────────┘                              └────────────────────────┘
+```
+
+- **[`tmai-core`](https://github.com/trust-delta/tmai-core)** — private, language-agnostic server that owns the live agent / dispatch state and implements the API.
+- **`tmai-api-spec`** (this repo, public) — the only authoritative description of what `tmai-core` exposes. All downstream clients build against this.
+- **[`tmai-react`](https://github.com/trust-delta/tmai-react)** — public React WebUI; a reference consumer of the spec. Third-party UIs (TUIs, mobile, other automations) consume the same spec.
 
 ## What lives here
 
-| File | Purpose |
-|------|---------|
-| `openapi.json` | OpenAPI 3.1 document describing the HTTP REST API served by `tmai-core` |
-| `docs/index.html` | Redoc-based documentation viewer (published via GitHub Pages) |
+| File                           | Purpose |
+|--------------------------------|---------|
+| `openapi.json`                 | OpenAPI 3.1 document describing the HTTP REST API served by `tmai-core`, including the `TmaiError` / `ErrorCode` / `RetryHint` taxonomy reused across every surface |
+| `corevents.schema.json`        | JSON Schema (2020-12) for every `CoreEvent` variant emitted on the `/api/events` SSE stream |
+| `docs/errors.md`               | Human-readable error taxonomy — per-code semantics, typical `context`, typical `retry_hint` |
+| `docs/index.html`              | Redoc-based documentation viewer with links to the JSON Schema and error taxonomy (published via GitHub Pages) |
 
 Future additions (planned):
 
-- `corevents.schema.json` — JSON Schema for SSE `CoreEvent` variants
 - `mcp-tools.json` — snapshot of MCP `tools/list` output from `tmai-core`
 - Versioned directories (`v0.1.0/`, `v0.2.0/`, ...) for historical specs
 
@@ -51,7 +69,7 @@ Hosted at https://trust-delta.github.io/tmai-api-spec/ (Redoc-rendered).
 
 ## Status
 
-**v0.0.1 — bootstrap.** Contains the initial PoC endpoint (`GET /api/task-meta`) migrated from `tmai-core` issue #446. The remaining ~79 endpoints will be added incrementally; breaking changes are permitted at any time during v0.x.
+**v0.1.0 — contract-layer bootstrap.** The initial PoC endpoint (`GET /api/task-meta`, migrated from `tmai-core` issue #446) now sits alongside the full `TmaiError` / `ErrorCode` / `RetryHint` taxonomy (issue #2) and `corevents.schema.json` covering every `CoreEvent` variant including the contract-layer additions (issue #1). The remaining ~79 REST endpoints will be added incrementally; breaking changes are permitted at any time during v0.x.
 
 ## License
 
