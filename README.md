@@ -1,5 +1,7 @@
 # tmai-api-spec
 
+> 🏠 **Project hub**: [`trust-delta/tmai`](https://github.com/trust-delta/tmai) — start there for binary installs, overview, and a map of all sub-repos.
+
 Public API contracts for **tmai**, published as the stable interface between its private core and its public UI clients.
 
 ```
