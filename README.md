@@ -69,9 +69,20 @@ UI clients can choose any subset of these channels. The standard UIs `tmai-ratat
 
 Hosted at https://trust-delta.github.io/tmai-api-spec/ (Redoc-rendered).
 
+## Changelog
+
+### v1.8.0 (additive — minor bump)
+
+- **`QueuedPrompt` schema** added to `openapi.json` → `components.schemas`. References existing `ActionOrigin`.
+- **`GET /agents/{id}/prompt-queue`** — enumerate the FIFO queue for an agent (oldest-first). Returns `404` only when the agent itself is unknown.
+- **`DELETE /agents/{id}/prompt-queue/{prompt_id}`** — cancel a single queued prompt. Returns `200 { status: "cancelled" | "already_drained" }`. Deleting an unknown `prompt_id` under a **known** agent returns `already_drained` (idempotent); `404` is reserved for unknown agents. Servers MUST NOT 500 on unknown prompt IDs.
+- **`PromptQueueChanged` SSE variant** added to `corevents.schema.json`. Emitted on enqueue, drain, and cancel; carries the full updated queue. Consumers SHOULD tolerate this variant silently if they do not yet consume it (forward-compatibility rule).
+
+### v0.1.0 — contract-layer bootstrap
+
 ## Status
 
-**v0.1.0 — contract-layer bootstrap.** The initial PoC endpoint (`GET /api/task-meta`, migrated from `tmai-core` issue #446) now sits alongside the full `TmaiError` / `ErrorCode` / `RetryHint` taxonomy (issue #2) and `corevents.schema.json` covering every `CoreEvent` variant including the contract-layer additions (issue #1). The remaining ~79 REST endpoints will be added incrementally; breaking changes are permitted at any time during v0.x.
+**v1.8.0.** The initial PoC endpoint (`GET /api/task-meta`, migrated from `tmai-core` issue #446) now sits alongside the full `TmaiError` / `ErrorCode` / `RetryHint` taxonomy (issue #2), `corevents.schema.json` covering every `CoreEvent` variant including the contract-layer additions (issue #1), and the prompt-queue contract (`QueuedPrompt`, `GET`/`DELETE /agents/{id}/prompt-queue`, `PromptQueueChanged` SSE — issue #5). The remaining ~79 REST endpoints will be added incrementally; breaking changes are permitted at any time during v0.x.
 
 ## License
 
