@@ -10,7 +10,7 @@
       "name": "MIT",
       "identifier": "MIT"
     },
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "servers": [
     {
@@ -26,6 +26,127 @@
   ],
   "security": [],
   "paths": {
+    "/agents/{id}/prompt-queue": {
+      "get": {
+        "tags": ["prompt-queue"],
+        "summary": "List queued prompts for an agent",
+        "description": "Returns all prompts currently waiting for the target agent, ordered oldest-first (delivery order). Returns an empty array when the queue is empty.",
+        "operationId": "list_prompt_queue",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Agent target ID (e.g. `main:0.0`).",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queued prompts, ordered oldest-first (delivery order).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/QueuedPrompt" }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The agent itself is unknown. Callers MUST re-sync their agent list on this response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Request failed at a tmai contract boundary.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Unexpected internal failure.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{id}/prompt-queue/{prompt_id}": {
+      "delete": {
+        "tags": ["prompt-queue"],
+        "summary": "Cancel a queued prompt",
+        "description": "Cancels a single queued prompt by ID.\n\n**Idempotency contract**: deleting an unknown `prompt_id` under a *known* agent returns `200 { status: \"already_drained\" }`, not 404. Clients MUST treat `already_drained` as success — the optimistic cancel already matches reality, and the prompt may have been drained between the GET and this DELETE. Servers MUST NOT return 500 for unknown prompt IDs.\n\nThe 404 response is reserved exclusively for cases where the agent itself is unknown.",
+        "operationId": "cancel_queued_prompt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Agent target ID (e.g. `main:0.0`).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "description": "Stable identifier of the queued prompt to cancel.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`cancelled` when the prompt was removed from the queue; `already_drained` when the prompt ID was not found under a known agent (idempotent — treat as success).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status"],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["cancelled", "already_drained"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The agent itself is unknown. Callers MUST re-sync their agent list on this response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Request failed at a tmai contract boundary.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          },
+          "5XX": {
+            "description": "Unexpected internal failure.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TmaiError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/task-meta": {
       "get": {
         "tags": [
@@ -70,6 +191,77 @@
   },
   "components": {
     "schemas": {
+      "ActionOrigin": {
+        "description": "Who initiated an action — attached to events and queue entries that audit-matter or need per-origin handling.",
+        "oneOf": [
+          {
+            "type": "object",
+            "title": "Human",
+            "required": ["kind", "interface"],
+            "properties": {
+              "kind": { "type": "string", "const": "Human" },
+              "interface": {
+                "type": "string",
+                "description": "Which UI: \"webui\", \"tui\", \"mobile\", \"cli\", etc."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "title": "Agent",
+            "required": ["kind", "id", "is_orchestrator"],
+            "properties": {
+              "kind": { "type": "string", "const": "Agent" },
+              "id": { "type": "string", "description": "Agent target id (e.g. \"main:0.0\")." },
+              "is_orchestrator": { "type": "boolean" }
+            }
+          },
+          {
+            "type": "object",
+            "title": "System",
+            "required": ["kind", "subsystem"],
+            "properties": {
+              "kind": { "type": "string", "const": "System" },
+              "subsystem": {
+                "type": "string",
+                "description": "Subsystem name (e.g. \"auto_cleanup\", \"pr_monitor\")."
+              }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "Human": "#/components/schemas/ActionOrigin",
+            "Agent": "#/components/schemas/ActionOrigin",
+            "System": "#/components/schemas/ActionOrigin"
+          }
+        }
+      },
+      "QueuedPrompt": {
+        "type": "object",
+        "description": "A single prompt waiting in an agent's send-queue. Prompts are delivered in FIFO order when the target agent transitions to Idle.",
+        "required": ["id", "prompt", "queued_at"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Server-assigned stable identifier (uuid v7 recommended for monotonic ordering)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Prompt text that will be delivered when the target agent becomes Idle."
+          },
+          "queued_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC 3339 timestamp when the prompt was enqueued."
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ActionOrigin",
+            "description": "Optional caller origin (human/agent/system) captured at enqueue time."
+          }
+        }
+      },
       "ErrorCode": {
         "type": "string",
         "description": "Machine-readable, stable error classification.\n\nValues are **stable forever once added** — deprecations are handled by aliasing, not removal. Adding a new code is a minor-version bump of the taxonomy. See `docs/errors.md` for each code's meaning and usage.",
@@ -265,6 +457,10 @@
     {
       "name": "task-meta",
       "description": "Project task metadata — merges git worktree info with `.task-meta/` JSON"
+    },
+    {
+      "name": "prompt-queue",
+      "description": "Per-agent send-prompt queue — enumerate and cancel queued prompts before delivery"
     }
   ]
 }

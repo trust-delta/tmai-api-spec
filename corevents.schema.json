@@ -40,7 +40,8 @@
     { "$ref": "#/$defs/CapacityChanged" },
     { "$ref": "#/$defs/ContractViolation" },
     { "$ref": "#/$defs/DispatchBypassUsed" },
-    { "$ref": "#/$defs/BundleStatusChanged" }
+    { "$ref": "#/$defs/BundleStatusChanged" },
+    { "$ref": "#/$defs/PromptQueueChanged" }
   ],
   "$defs": {
     "ActionOrigin": {
@@ -672,6 +673,47 @@
         "bundle_id": { "$ref": "#/$defs/BundleId" },
         "old": { "$ref": "#/$defs/BundleStatus" },
         "new": { "$ref": "#/$defs/BundleStatus" }
+      }
+    },
+    "QueuedPrompt": {
+      "type": "object",
+      "description": "A single prompt waiting in an agent's send-queue. Prompts are delivered in FIFO order when the target agent transitions to Idle.",
+      "required": ["id", "prompt", "queued_at"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Server-assigned stable identifier (uuid v7 recommended for monotonic ordering)."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt text that will be delivered when the target agent becomes Idle."
+        },
+        "queued_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "RFC 3339 timestamp when the prompt was enqueued."
+        },
+        "origin": {
+          "$ref": "#/$defs/ActionOrigin",
+          "description": "Optional caller origin (human/agent/system) captured at enqueue time."
+        }
+      }
+    },
+    "PromptQueueChanged": {
+      "type": "object",
+      "description": "The prompt queue for an agent changed (prompt enqueued, drained on delivery, or cancelled via DELETE). Carries the full updated queue so consumers can replace their local snapshot without diffing.\n\nThis variant MUST be ignored by clients that do not yet consume it — it follows the forward-compatibility rules for unknown variants. tmai-react v1 uses 3 s polling; SSE adoption is a planned follow-up.",
+      "required": ["type", "target", "queue"],
+      "properties": {
+        "type": { "const": "PromptQueueChanged" },
+        "target": {
+          "type": "string",
+          "description": "Agent target ID whose queue changed (e.g. \"main:0.0\")."
+        },
+        "queue": {
+          "type": "array",
+          "description": "Full updated queue, ordered oldest-first (delivery order). Empty array means the queue is now empty.",
+          "items": { "$ref": "#/$defs/QueuedPrompt" }
+        }
       }
     }
   }
