@@ -1,6 +1,6 @@
 # tmai-api-spec
 
-> 🏠 **Project hub**: [`trust-delta/tmai`](https://github.com/trust-delta/tmai) — start there for binary installs, overview, and a map of all sub-repos.
+> ⚠️ **Archived 2026-04-23** — this repository is read-only. Contents are consolidated into [`trust-delta/tmai`](https://github.com/trust-delta/tmai) under `api-spec/`; install the latest binaries from <https://github.com/trust-delta/tmai/releases>.
 
 Public API contracts for **tmai**, published as the stable interface between its private core and its public UI clients.
 
